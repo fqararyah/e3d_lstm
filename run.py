@@ -44,7 +44,7 @@ tf.app.flags.DEFINE_boolean('reverse_input', False,
 
 tf.app.flags.DEFINE_string('model_name', 'e3d_lstm', 'The name of the architecture.')
 tf.app.flags.DEFINE_string('pretrained_model', '', '.ckpt file to initialize from.')
-tf.app.flags.DEFINE_string('num_hidden', '356,256,256,256',
+tf.app.flags.DEFINE_string('num_hidden', '320,320,320,320',
                'COMMA separated number of units of e3d lstms.')
 tf.app.flags.DEFINE_integer('filter_size', 5, 'filter of a e3d lstm layer.')
 tf.app.flags.DEFINE_boolean('layer_norm', True, 'whether to apply tensor layer norm.')
@@ -56,7 +56,7 @@ tf.app.flags.DEFINE_float('sampling_changing_rate', 0.00002, 'for scheduled samp
 
 tf.app.flags.DEFINE_float('lr', 0.001, 'learning rate.')
 tf.app.flags.DEFINE_float('per_process_gpu_memory_fraction', 0.97, 'portion of mem')
-tf.app.flags.DEFINE_integer('batch_size', 2, 'batch size for training.')
+tf.app.flags.DEFINE_integer('batch_size', 4, 'batch size for training.')
 tf.app.flags.DEFINE_integer('max_iterations', 80000, 'max num of steps.')
 tf.app.flags.DEFINE_integer('display_interval', 1345665,
                      'number of iters showing training loss.')
@@ -66,7 +66,8 @@ tf.app.flags.DEFINE_integer('snapshot_interval', 1000,
 tf.app.flags.DEFINE_integer('num_save_samples', 10, 'number of sequences to be saved.')
 tf.app.flags.DEFINE_integer('n_gpu', 1,
                      'how many GPUs to distribute the training across.')
-tf.app.flags.DEFINE_boolean('allow_gpu_growth', True, 'allow gpu growth')
+tf.app.flags.DEFINE_boolean('allow_gpu_growth', False, 'allow gpu growth')
+tf.app.flags.DEFINE_boolean('log_device_placement', False, 'log the placement.')
 
 FLAGS = tf.app.flags.FLAGS
 
@@ -82,7 +83,9 @@ def main(_):
 
   gpu_list = np.asarray(
       os.environ.get('CUDA_VISIBLE_DEVICES', '-1').split(','), dtype=np.int32)
-  FLAGS.n_gpu = len(gpu_list)
+  #FLAGS.n_gpu = len(gpu_list)
+  #print(len(gpu_list))
+  #exit()
   print('Initializing models')
 
   model = Model(FLAGS)
