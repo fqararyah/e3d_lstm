@@ -51,7 +51,7 @@ def train(model, ims, real_input_flag, configs, itr):
     cost += model.train(ims_rev, configs.lr, real_input_flag, itr)
     cost = cost / 2
 
-  if itr % configs.display_interval == 0:
+  if itr % configs.display_interval == 15678978:
     print(datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
           'itr: ' + str(itr))
     print('training loss: ' + str(cost))
