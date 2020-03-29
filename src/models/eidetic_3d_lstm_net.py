@@ -69,6 +69,10 @@ def rnn(images, real_input_flag, num_layers, num_hidden, configs):
         if time_step < input_length:
           input_frm = images[:, time_step]
         else:
+          #print(real_input_flag.get_shape())
+          #print(x_gen.get_shape())
+          #print(images.get_shape())
+          #exit()
           time_diff = time_step - input_length
           input_frm = real_input_flag[:, time_diff] * images[:, time_step] \
                       + (1 - real_input_flag[:, time_diff]) * x_gen  # pylint: disable=used-before-assignment
@@ -93,7 +97,7 @@ def rnn(images, real_input_flag, num_layers, num_hidden, configs):
         x_gen = tf.layers.conv3d(hidden[num_layers - 1], output_channels,
                                  [window_length, 1, 1], [window_length, 1, 1],
                                  'same')
-        x_gen = tf.squeeze(x_gen)
+        x_gen = tf.squeeze(x_gen, [1])
         gen_images.append(x_gen)
         reuse = True
 

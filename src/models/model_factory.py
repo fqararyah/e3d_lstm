@@ -21,8 +21,28 @@ from __future__ import print_function
 import os
 from src.models import eidetic_3d_lstm_net
 import tensorflow as tf
+import time
 
+from graphviz import Digraph
+from graphviz import Source
+import json
+from tensorflow.python.client import timeline
 
+def profile(run_metadata, epoch=0):
+  with open('profs/timeline_step' + str(epoch) + '.json', 'w') as f:
+    # Create the Timeline object, and write it to a json file
+    fetched_timeline = timeline.Timeline(run_metadata.step_stats)
+    chrome_trace = fetched_timeline.generate_chrome_trace_format()
+    f.write(chrome_trace)
+
+def graph_to_dot(graph):
+  dot = Digraph()
+  for n in graph.as_graph_def().node:
+    dot.node(n.name, label= n.name)
+    for i in n.input:
+      dot.edge(i, n.name)
+  return dot
+        
 def adam_updates(params, cost_or_grads, lr=0.001, mom1=0.9, mom2=0.999):
   """Builds an adam optimizer."""
   updates = []
@@ -83,30 +103,30 @@ class Model(object):
     num_hidden = [int(x) for x in self.configs.num_hidden.split(',')]
     num_layers = len(num_hidden)
     for i in range(self.configs.n_gpu):
-      with tf.device('/gpu:%d' % i):
-        with tf.variable_scope(
-            tf.get_variable_scope(), reuse=True if i > 0 else None):
-          # define a model
-          output_list = self.construct_model(self.x[i], self.real_input_flag,
-                                             num_layers, num_hidden)
+      #with tf.device('/gpu:%d' % i):
+      with tf.variable_scope(
+          tf.get_variable_scope(), reuse=True if i > 0 else None):
+        # define a model
+        output_list = self.construct_model(self.x[i], self.real_input_flag,
+                                           num_layers, num_hidden)
 
-          gen_ims = output_list[0]
-          loss = output_list[1]
-          loss_train.append(loss / self.configs.batch_size)
-          # gradients
-          all_params = tf.trainable_variables()
-          grads.append(tf.gradients(loss, all_params))
-          self.pred_seq.append(gen_ims)
+        gen_ims = output_list[0]
+        loss = output_list[1]
+        loss_train.append(loss / self.configs.batch_size)
+        # gradients
+        all_params = tf.trainable_variables()
+        grads.append(tf.gradients(loss, all_params))
+        self.pred_seq.append(gen_ims)
 
     # if self.configs.n_gpu == 1:
     #     self.train_op = tf.train.AdamOptimizer(self.configs.lr).minimize(loss)
     # else:
     # add losses and gradients together and get training updates
-    with tf.device('/gpu:0'):
-      for i in range(1, self.configs.n_gpu):
-        loss_train[0] += loss_train[i]
-        for j in range(len(grads[0])):
-          grads[0][j] += grads[i][j]
+    #with tf.device('/gpu:0'):
+    for i in range(1, self.configs.n_gpu):
+      loss_train[0] += loss_train[i]
+      for j in range(len(grads[0])):
+        grads[0][j] += grads[i][j] 
     # keep track of moving average
     ema = tf.train.ExponentialMovingAverage(decay=0.9995)
     maintain_averages_op = tf.group(ema.apply(all_params))
@@ -121,10 +141,89 @@ class Model(object):
     variables = tf.global_variables()
     self.saver = tf.train.Saver(variables)
     init = tf.global_variables_initializer()
-    config_prot = tf.ConfigProto()
-    config_prot.gpu_options.allow_growth = configs.allow_gpu_growth
+    config_prot = tf.ConfigProto(gpu_options=tf.GPUOptions(per_process_gpu_memory_fraction=self.configs.per_process_gpu_memory_fraction))
+    #config_prot.gpu_options.allow_growth = configs.allow_gpu_growth
     config_prot.allow_soft_placement = True
+    config_prot.log_device_placement = self.configs.log_device_placement    
     self.sess = tf.Session(config=config_prot)
+    #fareed
+    dot_rep = graph_to_dot(self.sess.graph)
+        #s = Source(dot_rep, filename="test.gv", format="PNG")
+    with open('./profs/e3d.dot', 'w') as fwr:
+        fwr.write(str(dot_rep))
+
+    self.options = tf.RunOptions(trace_level=tf.RunOptions.SOFTWARE_TRACE)
+    self.run_metadata = tf.RunMetadata()
+    
+    operations_tensors = {}
+    operations_attributes = {}
+    operations_names = tf.get_default_graph().get_operations()
+    count1 = 0
+    count2 = 0
+
+    for operation in operations_names:
+        operation_name = operation.name
+        operations_info = tf.get_default_graph().get_operation_by_name(operation_name).values()
+        
+        try:
+            operations_attributes[operation_name] = []
+            operations_attributes[operation_name].append(operation.type)
+            operations_attributes[operation_name].append(tf.get_default_graph(
+            ).get_tensor_by_name(operation_name + ':0').dtype._is_ref_dtype)
+        except:
+            pass
+            
+        if len(operations_info) > 0:
+            if not (operations_info[0].shape.ndims is None):
+                operation_shape = operations_info[0].shape.as_list()
+                operation_dtype_size = operations_info[0].dtype.size
+                if not (operation_dtype_size is None):
+                    operation_no_of_elements = 1
+                    for dim in operation_shape:
+                        if not(dim is None):
+                            operation_no_of_elements = operation_no_of_elements * dim
+                    total_size = operation_no_of_elements * operation_dtype_size
+                    operations_tensors[operation_name] = total_size
+                else:
+                    count1 = count1 + 1
+            else:
+                count1 = count1 + 1
+                operations_tensors[operation_name] = -1
+
+            #   print('no shape_1: ' + operation_name)
+            #  print('no shape_2: ' + str(operations_info))
+            #  operation_namee = operation_name + ':0'
+            # tensor = tf.get_default_graph().get_tensor_by_name(operation_namee)
+            # print('no shape_3:' + str(tf.shape(tensor)))
+            # print('no shape:' + str(tensor.get_shape()))
+
+        else:
+            # print('no info :' + operation_name)
+            # operation_namee = operation.name + ':0'
+            count2 = count2 + 1
+            operations_tensors[operation_name] = -1
+
+            # try:
+            #   tensor = tf.get_default_graph().get_tensor_by_name(operation_namee)
+            # print(tensor)
+            # print(tf.shape(tensor))
+            # except:
+            # print('no tensor: ' + operation_namee)
+    print(count1)
+    print(count2)
+
+    with open('./profs/tensors_sz_32.txt', 'w') as f:
+        for tensor, size in operations_tensors.items():
+            f.write('"' + tensor + '"::' + str(size) + '\n')
+    
+    with open('./profs/operations_attributes.txt', 'w') as f:
+        for op, attrs in operations_attributes.items():
+            strr = op
+            for attr in attrs:
+                strr += '::' + str(attr)
+            strr += '\n'
+            f.write(strr)
+    #end fareed
     self.sess.run(init)
     if self.configs.pretrained_model:
       self.saver.restore(self.sess, self.configs.pretrained_model)
@@ -134,7 +233,22 @@ class Model(object):
     feed_dict.update({self.tf_lr: lr})
     feed_dict.update({self.itr: float(itr)})
     feed_dict.update({self.real_input_flag: real_input_flag})
-    loss, _ = self.sess.run((self.loss_train, self.train_op), feed_dict)
+    
+    if itr % 10 == 3:
+      loss, _ = self.sess.run((self.loss_train, self.train_op), feed_dict, options = self.options, run_metadata = self.run_metadata)    
+      profile(self.run_metadata, itr)    
+      if itr == 13:
+        options_mem = tf.profiler.ProfileOptionBuilder.time_and_memory()
+        options_mem["min_bytes"] = 0
+        options_mem["min_micros"] = 0
+        options_mem["output"] = 'file:outfile=./profs/mem.txt'
+        options_mem["select"] = ("bytes", "peak_bytes", "output_bytes",
+                             "residual_bytes")
+        mem = tf.profiler.profile(tf.get_default_graph(), run_meta=self.run_metadata, cmd="scope", options=options_mem)
+    else:                    
+      t0 = time.time()
+      loss, _ = self.sess.run((self.loss_train, self.train_op), feed_dict)
+      print(time.time() - t0)
     return loss
 
   def test(self, inputs, real_input_flag):
