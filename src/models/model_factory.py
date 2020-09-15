@@ -103,30 +103,30 @@ class Model(object):
     num_hidden = [int(x) for x in self.configs.num_hidden.split(',')]
     num_layers = len(num_hidden)
     for i in range(self.configs.n_gpu):
-      #with tf.device('/gpu:%d' % i):
-      with tf.variable_scope(
-          tf.get_variable_scope(), reuse=True if i > 0 else None):
-        # define a model
-        output_list = self.construct_model(self.x[i], self.real_input_flag,
-                                           num_layers, num_hidden)
-
-        gen_ims = output_list[0]
-        loss = output_list[1]
-        loss_train.append(loss / self.configs.batch_size)
-        # gradients
-        all_params = tf.trainable_variables()
-        grads.append(tf.gradients(loss, all_params))
-        self.pred_seq.append(gen_ims)
+      with tf.device('/gpu:%d' % i):
+          with tf.variable_scope(
+              tf.get_variable_scope(), reuse=True if i > 0 else None):
+            # define a model
+            output_list = self.construct_model(self.x[i], self.real_input_flag,
+                                               num_layers, num_hidden)
+    
+            gen_ims = output_list[0]
+            loss = output_list[1]
+            loss_train.append(loss / self.configs.batch_size)
+            # gradients
+            all_params = tf.trainable_variables()
+            grads.append(tf.gradients(loss, all_params))
+            self.pred_seq.append(gen_ims)
 
     # if self.configs.n_gpu == 1:
     #     self.train_op = tf.train.AdamOptimizer(self.configs.lr).minimize(loss)
     # else:
     # add losses and gradients together and get training updates
-    #with tf.device('/gpu:0'):
-    for i in range(1, self.configs.n_gpu):
-      loss_train[0] += loss_train[i]
-      for j in range(len(grads[0])):
-        grads[0][j] += grads[i][j] 
+    with tf.device('/cpu:0'):
+        for i in range(1, self.configs.n_gpu):
+          loss_train[0] += loss_train[i]
+          for j in range(len(grads[0])):
+            grads[0][j] += grads[i][j] 
     # keep track of moving average
     ema = tf.train.ExponentialMovingAverage(decay=0.9995)
     maintain_averages_op = tf.group(ema.apply(all_params))
