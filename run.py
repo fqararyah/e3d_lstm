@@ -25,6 +25,7 @@ import src.trainer as trainer
 from src.utils import preprocess
 import tensorflow as tf
 
+
 # -----------------------------------------------------------------------------
 
 tf.app.flags.DEFINE_string('train_data_paths', './data/moving-mnist-example/moving-mnist-train.npz', 'train data paths.')
@@ -56,15 +57,15 @@ tf.app.flags.DEFINE_float('sampling_changing_rate', 0.00002, 'for scheduled samp
 
 tf.app.flags.DEFINE_float('lr', 0.001, 'learning rate.')
 tf.app.flags.DEFINE_float('per_process_gpu_memory_fraction', 0.97, 'portion of mem')
-tf.app.flags.DEFINE_integer('batch_size', 4, 'batch size for training.')
-tf.app.flags.DEFINE_integer('max_iterations', 80000, 'max num of steps.')
+tf.app.flags.DEFINE_integer('batch_size', 1, 'batch size for training.')
+tf.app.flags.DEFINE_integer('max_iterations', 12, 'max num of steps.')
 tf.app.flags.DEFINE_integer('display_interval', 1345665,
                      'number of iters showing training loss.')
 tf.app.flags.DEFINE_integer('test_interval', 1000, 'number of iters for test.')
 tf.app.flags.DEFINE_integer('snapshot_interval', 1000,
                      'number of iters saving models.')
 tf.app.flags.DEFINE_integer('num_save_samples', 10, 'number of sequences to be saved.')
-tf.app.flags.DEFINE_integer('n_gpu', 1,
+tf.app.flags.DEFINE_integer('n_gpu', 4,
                      'how many GPUs to distribute the training across.')
 tf.app.flags.DEFINE_boolean('allow_gpu_growth', False, 'allow gpu growth')
 tf.app.flags.DEFINE_boolean('log_device_placement', False, 'log the placement.')
@@ -84,7 +85,7 @@ def main(_):
   gpu_list = np.asarray(
       os.environ.get('CUDA_VISIBLE_DEVICES', '-1').split(','), dtype=np.int32)
   #FLAGS.n_gpu = len(gpu_list)
-  #print(len(gpu_list))
+  print(gpu_list)
   #exit()
   print('Initializing models')
 
